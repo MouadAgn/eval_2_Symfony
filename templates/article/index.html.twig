@@ -1,110 +1,68 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{parent()}} - {{'Home'|trans}}{% endblock %}
+{% block title %}Hello ArticleController!{% endblock %}
 
-{% block content %}
-    <main class="container">
-        <h1>{{'Articles'|trans}}</h1>
-        <div class="row">
-            <div class="col-12 mb-3">
-                <label for="categorySelect" class="form-label">{{'SelectCategory'|trans}}</label>
-                <select id="categorySelect" class="form-select" aria-label="Category Select">
-                    <option selected value="all">{{'AllArticles'|trans}}</option>
-                    {% for category in categories %}
-                        <option value="{{category.id}}">{{category.title}}</option>
-                    {% endfor %}
-                </select>
+{% block body %}
+<div class="container mt-4">
+    {% if is_granted('ROLE_ADMIN') %}       
+<form method="post" class="mb-4">
+    {# Display global form errors #}
+    {{ form_errors(form) }}
+
+    <div class="mb-3">
+        <b>{{ form_label(form.titre, 'Titre', {'label_attr': {'class': 'form-label'}}) }}</b>
+        {{ form_widget(form.titre, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.titre) }}
+    </div>
+    <div class="mb-3">
+        <b>{{ form_label(form.categorie, 'Categorie', {'label_attr': {'class': 'form-label'}}) }}</b>
+        {{ form_widget(form.categorie, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.categorie) }}
+    </div>
+    <div class="mb-3">
+        <b>{{ form_label(form.contenu, 'Contenu', {'label_attr': {'class': 'form-label'}}) }}</b>
+        {{ form_widget(form.contenu, {'attr': {'class': 'form-control'}}) }}
+        {{ form_errors(form.contenu) }}
+    </div>
+    <div class="mb-3">
+        <b>{{ form_label(form.etat, 'État', {'label_attr': {'class': 'form-label'}}) }}</b>
+        {{ form_widget(form.etat, {'attr': {'class': 'form-select'}}) }}
+        {{ form_errors(form.etat) }}
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+
+
+        
+    {% endif %}
+
+    <h1 class="mt-4">Articles</h1>
+<div class="row">
+    {% for article in articles %}
+        {% if article.etat == 1 or (is_granted('ROLE_ADMIN') and article.etat == 0) %}
+            <div class="col-md-6">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <a href="{{ path('detail_article', {'id': article.id}) }}">
+                            <h2 class="card-title">{{ article.titre }}</h2>
+                        </a>
+                        <p class="card-text"><b>Auteur:</b> {{ article.auteur.nom }}</p>
+                    </div>
+                </div>
             </div>
-        </div>
-        {% if articles is empty %}
-            <div class="alert alert-info" role="alert">
-                {{'NoArticlesFound'|trans}}
-            </div>
-        {% else %}
-            <div class="row row-cols-1 row-cols-md-2 g-4 mb-3">
-                {% for  article in articles %}
-                    {% include 'include/article_card.html.twig' with {'article': article} %}
-                {% endfor %}
+        {% elseif  article.etat == 0|length < 0 %}
+            <div class="col-md-12">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <b>Aucun article brouillon...</b>
+                    </div>
+                </div>
             </div>
         {% endif %}
-    </main>
-{% endblock %}
+    {% endfor %}
+</div>
 
-{% block javascripts %}
-    <script>
-        function stripHtml(htmlString) {
-            var tempDivElement = document.createElement("div");
-            tempDivElement.innerHTML = htmlString;
-            return tempDivElement.textContent || tempDivElement.innerText || "";
-        }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            var categorySelect = document.getElementById('categorySelect');
-            categorySelect.addEventListener('change', function() {
-                Array.from(document.getElementsByClassName('loaded-card')).forEach(function(element) {
-                    element.style.display = 'none';
-                });
-                Array.from(document.getElementsByClassName('loading-card')).forEach(function(element) {
-                    element.style.display = 'block';
-                });
-                
-                var categoryId = this.value;
-
-                fetch('/article/public/category/' + categoryId)
-                    .then(response => response.json())
-                    .then(articles => {
-                        updateArticles(articles);
-                    });
-            });
-
-            
-
-            function updateArticles(articles) {
-                var articlesContainer = document.querySelector('.row-cols-1');
-                articlesContainer.innerHTML = '';
-
-                articles.forEach(article => {
-                    console.log(article);
-                    var cleanContent = stripHtml(article.content).substring(0, 100);
-                    var cleanPublicationDate = new Date(article.publicationDate).toLocaleDateString();
-                    articlesContainer.innerHTML += `
-                        <div class="loaded-card col h-100">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h5 class="card-title">${article.title}</h5>
-                                    <p class="card-text">${cleanContent}...</p>
-                                    <a href="./article/show/${article.id}" class="btn btn-primary">{{ 'ReadMore'|trans }}</a>
-                                    {% if is_granted('ROLE_ADMIN') %}
-                                        <a href="./article/edit/${article.id}" class="btn btn-warning">{{ 'Edit'|trans }}</a>
-                                        <a href="./article/delete/${article.id}" class="btn btn-danger">{{ 'Delete'|trans }}</a>
-                                    {% endif %}
-                                </div>
-                                <div class="card-footer text-body-secondary">
-                                    <p class="card-text"><small class="text-muted">{{ 'PublishedOn'|trans }} ${cleanPublicationDate} {{ 'by'|trans }} ${article.author.username}</small></p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="loading-card col" style="display:none;">
-                            <div class="card" aria-hidden="true">
-                                <div class="card-body">
-                                    <h5 class="card-title placeholder-wave">
-                                        <span class="placeholder col-6"></span>
-                                    </h5>
-                                    <p class="card-text placeholder-wave">
-                                        <span class="placeholder col-7"></span>
-                                        <span class="placeholder col-4"></span>
-                                        <span class="placeholder col-4"></span>
-                                        <span class="placeholder col-6"></span>
-                                        <span class="placeholder col-8"></span>
-                                    </p>
-                                </div>
-                                <div class="card-footer text-body-secondary">
-                                    <p class="card-text"><small class="text-muted placeholder col-6"></small></p>
-                                </div>
-                            </div>
-                        </div>`;
-                });
-            }
-        });
-    </script>
+    
+</div>
 {% endblock %}

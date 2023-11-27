@@ -7,7 +7,6 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 class Article
@@ -15,55 +14,39 @@ class Article
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['article:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['article:read'])]
-    private ?string $title = null;
+    private ?string $titre = null;
 
-    #[ORM\Column(type: Types::TEXT)]
-    #[Groups(['article:read'])]
-    private ?string $content = null;
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $contenu = null;
 
     #[ORM\Column]
-    #[Groups(['article:read'])]
-    private ?\DateTimeImmutable $creationDate = null;
+    private ?\DateTimeImmutable $dateCrea = null;
 
-    #[ORM\Column(length: 25)]
-    #[Groups(['article:read'])]
-    private ?string $state = null;
+    #[ORM\Column]
+    private ?bool $etat = null;
 
-    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
-    #[Groups(['article:read'])]
-    private ?\DateTimeInterface $publicationDate = null;
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $dateParu = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?User $auteur = null;
 
     #[ORM\ManyToOne(inversedBy: 'articles')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['article:read'])]
-    private ?User $author = null;
+    private ?Categorie $categorie = null;
 
-    #[ORM\ManyToOne(inversedBy: 'articles')]
-    #[ORM\JoinColumn(nullable: false)]
-    private ?Category $category = null;
+    #[ORM\OneToMany(mappedBy: 'Article', targetEntity: Commentaire::class)]
+    private Collection $commentaires;
 
-    #[ORM\OneToMany(mappedBy: 'article', targetEntity: Comment::class, orphanRemoval: true)]
-    private Collection $comments;
-
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $image = null;
-
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $excerpt = null;
-
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $tags = null;
-
-    public function __construct(User $author)
+    public function __construct()
     {
-        $this->comments = new ArrayCollection();
-        $this->creationDate = new \DateTimeImmutable();
-        $this->author = $author;
+        $this->commentaires = new ArrayCollection();
+        $this->dateCrea = new \DateTimeImmutable();
+        $this->dateParu = new \DateTimeImmutable();
     }
 
     public function getId(): ?int
@@ -71,152 +54,116 @@ class Article
         return $this->id;
     }
 
-    public function getTitle(): ?string
+    public function getTitre(): ?string
     {
-        return $this->title;
+        return $this->titre;
     }
 
-    public function setTitle(string $title): static
+    public function setTitre(string $titre): static
     {
-        $this->title = $title;
+        $this->titre = $titre;
 
         return $this;
     }
 
-    public function getContent(): ?string
+    public function getContenu(): ?string
     {
-        return $this->content;
+        return $this->contenu;
     }
 
-    public function setContent(string $content): static
+    public function setContenu(?string $contenu): static
     {
-        $this->content = $content;
+        $this->contenu = $contenu;
 
         return $this;
     }
 
-    public function getCreationDate(): ?\DateTimeImmutable
+    public function getDateCrea(): ?\DateTimeImmutable
     {
-        return $this->creationDate;
+        return $this->dateCrea;
     }
 
-    public function setCreationDate(\DateTimeImmutable $creationDate): static
+    public function setDateCrea(\DateTimeImmutable $dateCrea): static
     {
-        $this->creationDate = $creationDate;
+        $this->dateCrea = $dateCrea;
 
         return $this;
     }
 
-    public function getState(): ?string
+    public function isEtat(): ?bool
     {
-        return $this->state;
+        return $this->etat;
     }
 
-    public function setState(string $state): static
+    public function setEtat(bool $etat): static
     {
-        $this->state = $state;
+        $this->etat = $etat;
 
         return $this;
     }
 
-    public function getPublicationDate(): ?\DateTimeInterface
+    public function getDateParu(): ?\DateTimeImmutable
     {
-        return $this->publicationDate;
+        return $this->dateParu;
     }
 
-    public function setPublicationDate(?\DateTimeInterface $publicationDate): static
+    public function setDateParu(?\DateTimeImmutable $dateParu): static
     {
-        $this->publicationDate = $publicationDate;
+        $this->dateParu = $dateParu;
 
         return $this;
     }
 
-    public function getAuthor(): ?User
+    public function getAuteur(): ?User
     {
-        return $this->author;
+        return $this->auteur;
     }
 
-    public function setAuthor(?User $author): static
+    public function setAuteur(?User $auteur): static
     {
-        $this->author = $author;
+        $this->auteur = $auteur;
 
         return $this;
     }
 
-    public function getCategory(): ?Category
+    public function getCategorie(): ?Categorie
     {
-        return $this->category;
+        return $this->categorie;
     }
 
-    public function setCategory(?Category $category): static
+    public function setCategorie(?Categorie $categorie): static
     {
-        $this->category = $category;
+        $this->categorie = $categorie;
 
         return $this;
     }
 
     /**
-     * @return Collection<int, Comment>
+     * @return Collection<int, Commentaire>
      */
-    public function getComments(): Collection
+    public function getCommentaires(): Collection
     {
-        return $this->comments;
+        return $this->commentaires;
     }
 
-    public function addComment(Comment $comment): static
+    public function addCommentaire(Commentaire $commentaire): static
     {
-        if (!$this->comments->contains($comment)) {
-            $this->comments->add($comment);
-            $comment->setArticle($this);
+        if (!$this->commentaires->contains($commentaire)) {
+            $this->commentaires->add($commentaire);
+            $commentaire->setArticle($this);
         }
 
         return $this;
     }
 
-    public function removeComment(Comment $comment): static
+    public function removeCommentaire(Commentaire $commentaire): static
     {
-        if ($this->comments->removeElement($comment)) {
+        if ($this->commentaires->removeElement($commentaire)) {
             // set the owning side to null (unless already changed)
-            if ($comment->getArticle() === $this) {
-                $comment->setArticle(null);
+            if ($commentaire->getArticle() === $this) {
+                $commentaire->setArticle(null);
             }
         }
-
-        return $this;
-    }
-
-    public function getImage(): ?string
-    {
-        return $this->image;
-    }
-
-    public function setImage(?string $image): static
-    {
-        $this->image = $image;
-
-        return $this;
-    }
-
-    public function getExcerpt(): ?string
-    {
-        return $this->excerpt;
-    }
-
-    public function setExcerpt(?string $excerpt): static
-    {
-        $this->excerpt = $excerpt;
-
-        return $this;
-    }
-
-    public function getTags(): ?string
-    {
-        return $this->tags;
-    }
-
-    public function setTags(?string $tags): static
-    {
-        $this->tags = $tags;
 
         return $this;
     }

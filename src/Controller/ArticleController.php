@@ -2,221 +2,151 @@
 
 namespace App\Controller;
 
-use App\Entity\Article;
-use App\Form\ArticleType;
-use App\Form\CommentType;
-use App\Entity\Category;
-use App\Entity\Comment;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Entity\Article;
+use App\Entity\Categorie;
+use App\Repository\CategorieRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
+use App\Form\ArticleType;
+use App\Repository\ArticleRepository;
+use App\Form\CommentaireType;
+use App\Entity\Commentaire;
+use Symfony\Component\Security\Core\Security;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 class ArticleController extends AbstractController
 {
-
-    private $authorizationChecker;
-
-    public function __construct(AuthorizationCheckerInterface $authorizationChecker)
+    public function __construct(private EntityManagerInterface $em, private ArticleRepository $ArticleRepository, private CategorieRepository $categorieRepository, private Security $security)
     {
-        $this->authorizationChecker = $authorizationChecker;
-    }
-
-    #[Route('/', name: 'app_article')]
-    public function index(EntityManagerInterface $em): Response
-    {
-        $articles = $em->getRepository(Article::class)->findBy(['state' => 'public']);
-        $categories = $em->getRepository(Category::class)->findAll();
-        return $this->render('article/index.html.twig', [
-            'articles' => $articles,
-            'categories' => $categories
-        ]);
-    }
-
-    #[IsGranted('ROLE_ADMIN')]
-    #[Route('/article/list', name: 'app_article_list')]
-    public function list(EntityManagerInterface $em): Response
-    {
-        $articles = $em->getRepository(Article::class)->findAll();
-        $categories = $em->getRepository(Category::class)->findAll();
-        return $this->render('article/list.html.twig', [
-            'articles' => $articles,
-            'categories' => $categories
-        ]);
-    }
-
-    #[IsGranted('ROLE_ADMIN')]
-    #[Route('/article/create', name: 'app_article_create')]
-    public function create(Request $request, EntityManagerInterface $em): Response
-    {
-        $user = $this->getUser();
-        $article = new Article($user);
-        $form = $this->createForm(ArticleType::class, $article);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            $em->persist($article);
-            $em->flush();
-
-            $message = $this->translator->trans('ArticleCreated');
-            $this->addFlash('success', $message);
-
-            if ($article->getState() == 'public')
-                return $this->redirectToRoute('app_article');
-            else
-                return $this->redirectToRoute('app_article_edit', ['id' => $article->getId()]);
-        } else {
-            return $this->render('article/create.html.twig', [
-                'form' => $form->createView(),
-            ]);
-        }
-    }
-
-    #[Route('/article/edit/{id}', name: 'app_article_edit')]
-    #[IsGranted('ROLE_ADMIN')]
-    public function edit(Request $request, EntityManagerInterface $em, $id): Response
-    {
-        $article = $em->getRepository(Article::class)->find($id);
-        if (!$article) {
-            $message = $this->translator->trans('ArticleDoesNotExist');
-            $this->addFlash('danger', $message);
-            return $this->redirectToRoute('app_article_list');
-        }
-
-        $form = $this->createForm(ArticleType::class, $article);
-        $form->handleRequest($request);
-
-        if ($form->isSubmitted() && $form->isValid()) {
-            if ($form->get('state')->getData() == 'public') {
-                $article->setPublicationDate(new \DateTimeImmutable());
-            }
-            $em->flush();
-            $message = $this->translator->trans('ArticleUpdated');
-            $this->addFlash('success', $message);
-            return $this->redirectToRoute('app_article_edit', ['id' => $article->getId()]);
-        } else {
-            return $this->render('article/edit.html.twig', [
-                'form' => $form->createView(),
-            ]);
-        }
-    }
-
-    #[Route('/article/show/{id}', name: 'app_article_show')]
-    public function show(EntityManagerInterface $em, Request $request, $id): Response
-    {
-        $article = $em->getRepository(Article::class)->find($id);
-        if (!$article || $article->getState() == 'draft') {
-            $message = $this->translator->trans('ArticleDoesNotExist');
-            $this->addFlash('danger', $message);
-            return $this->redirectToRoute('app_article_list');
-        }
-
-        if ($this->authorizationChecker->isGranted('ROLE_ADMIN')) {
-            $comments = $em->getRepository(Comment::class)->findBy(['article' => $article]);
-        } else {
-            $comments = $em->getRepository(Comment::class)->findBy(['article' => $article, 'state' => 'active']);
-        }
-        $commentForm = $this->createForm(CommentType::class);
-        $commentForm->handleRequest($request);
-
-        if ($commentForm->isSubmitted() && $commentForm->isValid()) {
-            $comment = $commentForm->getData();
-            $comment->setArticle($article);
-            $comment->setAuthor($this->getUser());
-
-            $em->persist($comment);
-            $em->flush();
             
-            $message = $this->translator->trans('CommentCreated');
-            $this->addFlash('success', $message);
-            return $this->redirectToRoute('app_article_show', ['id' => $article->getId()]);
+    }
+
+    #[Route('/article', name: 'app_article')]
+    public function index(Request $request): Response
+    {
+        $article = new Article();
+        $form = $this->createForm(ArticleType::class, $article);
+        $form->handleRequest($request);
+        $auteur = $this->security->getUser();
+        $article->setAuteur($auteur);
+
+        if ($form->isSubmitted() && !$form->isValid()) {
+            $this->addFlash('danger', "Le formulaire contient des erreurs");
+        } elseif ($form->isSubmitted() && $form->isValid()) {
+            // Vérifier si l'état est égal à 1 (Publié)
+            if ($article->isEtat() == 1) {
+                // Si l'état est égal à 1, générer la date de publication
+                $article->setDateParu(new \DateTimeImmutable());
+            } else {
+                // Si l'état n'est pas égal à 1, définir dateParu sur null
+                $article->setDateParu(null);
+            }
+            if (!$auteur){
+                $this->addFlash('danger', "Vous devez être connecté pour ajouter un article");
+                return $this->redirectToRoute('app_article');
+            } else{
+                $this->em->persist($article);
+                $this->em->flush();
+                $this->addFlash('success', "L'article a bien été ajouté");
+                return $this->redirectToRoute('app_article');
+
+            }
         }
 
-        return $this->render('article/show.html.twig', [
-            'article' => $article,
-            'commentForm' => $commentForm->createView(),
-            'comments' => $comments
+        return $this->render('article/index.html.twig', [
+            'controller_name' => 'ArticleController',
+            'form' => $form->createView(),
+            'articles' => $this->ArticleRepository->findAll()
         ]);
     }
 
-
-    #[IsGranted('ROLE_ADMIN')]
-    #[Route('/article/delete/{id}', name: 'app_article_delete')]
-    public function delete(EntityManagerInterface $em, $id): Response
+    #[Route('/article-details/{id}', name: 'detail_article')]
+    public function details(int $id, Article $article = null, Request $request, CommentaireController $commentaireController)
     {
-        $article = $em->getRepository(Article::class)->find($id);
-        if (!$article) {
-            $message = $this->translator->trans('ArticleDoesNotExist');
-            $this->addFlash('danger', $message);
-            return $this->redirectToRoute('app_article_list');
+        if ($article == null) {
+            return $this->redirectToRoute('app_article');
         }
-
-        $em->remove($article);
-        $em->flush();
-        $message = this->translator->trans('ArticleDeleted');
-        $this->addFlash('success', $message);
-        return $this->redirectToRoute('app_article_list');
-    }
-
-    #[Route('/article/public/category/{id}', name: 'app_article_public_category')]
-    public function category(EntityManagerInterface $em, SerializerInterface $serializer, $id): JsonResponse
-    {
-        if ($id == 'all') {
-            $articles = $em->getRepository(Article::class)->findBy(['state' => 'public']);
-        } else {
-            $category = $em->getRepository(Category::class)->find($id);
-            if (!$category) {
-                return new JsonResponse(['error' => 'This category does not exist.'], JsonResponse::HTTP_NOT_FOUND);
-            }
-            $articles = $em->getRepository(Article::class)->findBy(['category' => $category, 'state' => 'public']);
+        $article = $this->ArticleRepository->find($id); 
+        $categorie = $article->getCategorie();
+        $auteur = $article->getAuteur();
+        $auteurComm = $this->getUser(); 
+        $commentaire = new Commentaire();
+        $commentaire->setAuteur($auteurComm);
+        $commentaire->setArticle($article);
+        $commentaires = $article->getCommentaires();
+        
+        $commentaireForm = $commentaireController->createForm(CommentaireType::class, $commentaire);
+        $commentaireForm->handleRequest($request);
+    
+        if ($commentaireForm->isSubmitted() && $commentaireForm->isValid()) {
+            $this->em->persist($commentaire);
+            $this->em->flush();
+            $this->addFlash('success', 'Le commentaire a bien été ajouté.');
+            return $this->redirectToRoute('detail_article', ['id' => $id]);
+        } elseif ($commentaireForm->isSubmitted()) {
+            $this->addFlash('danger', 'Le commentaire n\'a pas été ajouté.');
         }
-
-        $jsonContent = $serializer->serialize($articles, 'json', ['groups' => 'article:read']);
-
-        return new JsonResponse($jsonContent, JsonResponse::HTTP_OK, [], true);
-    }
-
-    #[IsGranted('ROLE_ADMIN')]
-    #[Route('/article/draft/category/{id}', name: 'app_article_draft_category')]
-    public function draftCategory(EntityManagerInterface $em, SerializerInterface $serializer, $id): JsonResponse
-    {
-        if ($id == 'all') {
-            $articles = $em->getRepository(Article::class)->findBy(['state' => 'draft']);
-        } else {
-            $category = $em->getRepository(Category::class)->find($id);
-            if (!$category) {
-                return new JsonResponse(['error' => 'This category does not exist.'], JsonResponse::HTTP_NOT_FOUND);
-            }
-            $articles = $em->getRepository(Article::class)->findBy(['category' => $category, 'state' => 'draft']);
-        }
-
-        $jsonContent = $serializer->serialize($articles, 'json', ['groups' => 'article:read']);
-
-        return new JsonResponse($jsonContent, JsonResponse::HTTP_OK, [], true);
+    
+        return $this->render('article/details.html.twig', [
+            'articles' => $article,
+            'commentaireForm' => $commentaireForm->createView(),
+            'commentaires' => $commentaires,
+            'categorie' => $categorie
+        ]);
     }
 
     #[IsGranted('ROLE_ADMIN')]
-    #[Route('/article/all/category/{id}', name: 'app_article_all_category')]
-    public function allCategory(EntityManagerInterface $em, SerializerInterface $serializer, $id): JsonResponse
+    #[Route('/article-modifier/{id}', name: 'modifier_article')]
+    public function modifier(Request $request, Article $article = null)
     {
-        if ($id == 'all') {
-            $articles = $em->getRepository(Article::class)->findAll();
+        if ($article == null) {
+            return $this->redirectToRoute('app_article');
         } else {
-            $category = $em->getRepository(Category::class)->find($id);
-            if (!$category) {
-                return new JsonResponse(['error' => 'This category does not exist.'], JsonResponse::HTTP_NOT_FOUND);
+            $form = $this->createForm(ArticleType::class, $article);
+            $form->handleRequest($request);
+
+            if ($form->isSubmitted() && !$form->isValid()) {
+                $this->addFlash('danger', "Le formulaire contient des erreurs");
+            } elseif ($form->isSubmitted() && $form->isValid()) {
+                // Vérifier si l'état est égal à 1 (Publié)
+                if ($article->isEtat() == 1) {
+                    // Si l'état est égal à 1, générer la date de publication
+                    $article->setDateParu(new \DateTimeImmutable());
+                } else {
+                    // Si l'état n'est pas égal à 1, définir dateParu sur null
+                    $article->setDateParu(null);
+                }
+
+                $this->em->persist($article);
+                $this->em->flush();
+                $this->addFlash('success', "L'article a bien été modifié");
+                return $this->redirectToRoute('app_article');
             }
-            $articles = $em->getRepository(Article::class)->findBy(['category' => $category]);
+
+            return $this->render('article/modifier.html.twig', [
+                'form' => $form->createView(),
+                'article' => $article
+            ]);
         }
+    }
 
-        $jsonContent = $serializer->serialize($articles, 'json', ['groups' => 'article:read']);
-
-        return new JsonResponse($jsonContent, JsonResponse::HTTP_OK, [], true);
+    #[IsGranted('ROLE_ADMIN')]
+    #[Route('/article-supprimer/{id}', name: 'supprimer_article')]
+    public function supprimer(Article $article = null)
+    {
+        if ($article == null) {
+            return $this->redirectToRoute('app_article');
+        } else {
+            foreach ($article->getCommentaires() as $commentaire){
+                $article->removeCommentaire($commentaire);
+            }
+            $this->em->remove($article);
+            $this->em->flush();
+            $this->addFlash('success', "L'article a bien été supprimé");
+            return $this->redirectToRoute('app_article');
+        }
     }
 }

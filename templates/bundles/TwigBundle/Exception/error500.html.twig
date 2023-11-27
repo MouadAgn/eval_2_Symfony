@@ -1,0 +1,12 @@
+{# templates/bundles/TwigBundle/Exception/error404.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <div>
+        <h1>Erreur 500 - Erreur interne du serveur</h1>
+        <p>
+            Une erreur interne du serveur s'est produite. Nous nous excusons pour le désagrément. Veuillez réessayer plus tard.
+        </p>
+        <a href="{{ path('app_home') }}">Retour à l'accueil</a>
+    </div>
+{% endblock %}
