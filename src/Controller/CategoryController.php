@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+
 use App\Entity\Category;
 use App\Form\CategoryType;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,6 +15,14 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 class CategoryController extends AbstractController
 {
+
+    private $translator;
+
+    public function __construct(TranslatorInterface $translator)
+    {
+        $this->translator = $translator;
+    }
+
     #[IsGranted('ROLE_ADMIN')]
     #[Route('/category/list', name: 'app_category')]
     public function index(EntityManagerInterface $em): Response
